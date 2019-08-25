@@ -1,25 +1,24 @@
-ARG UBUNTU_VERSION=18.04
+ARG UBUNTU_VERSION=16.04
 FROM ubuntu:${UBUNTU_VERSION}
 
 # Arguments for the build. UBUNTU_VERSION needs to be repeated because
 # the first usage only applies to the FROM tag.
-ARG UBUNTU_VERSION=18.04
+ARG UBUNTU_VERSION=16.04
 ARG MPI_KIND=OpenMPI
-ARG PYTHON_VERSION=3.6
+ARG PYTHON_VERSION=2.7
 ARG TENSORFLOW_PACKAGE=tensorflow==1.14.0
 ARG KERAS_PACKAGE=keras==2.2.4
-ARG PYTORCH_PACKAGE=https://download.pytorch.org/whl/cpu/torch-1.1.0-cp36-cp36m-linux_x86_64.whl
-ARG TORCHVISION_PACKAGE=https://download.pytorch.org/whl/cpu/torchvision-0.3.0-cp36-cp36m-linux_x86_64.whl
-ARG MXNET_PACKAGE=mxnet==1.4.1
+ARG PYTORCH_PACKAGE=torch==1.2.0+cpu
+ARG TORCHVISION_PACKAGE=torchvision==0.4.0+cpu
+ARG MXNET_PACKAGE=mxnet==1.5.0
 ARG PYSPARK_PACKAGE=pyspark==2.4.0
-ARG NUMPY_PACKAGE=numpy==1.15.4
 
 # Set default shell to /bin/bash
 SHELL ["/bin/bash", "-cu"]
 
 # Install essential packages.
 RUN apt-get update -qq
-RUN  apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get install -y --no-install-recommends \
         wget \
         ca-certificates \
         cmake \
@@ -32,10 +31,10 @@ RUN  apt-get update && apt-get install -y --no-install-recommends \
 RUN apt-get install -y --no-install-recommends software-properties-common
 RUN add-apt-repository ppa:ubuntu-toolchain-r/test
 RUN apt-get update -qq
-RUN apt-get update  --fix-missing && apt-get install -y --no-install-recommends g++-7
+RUN apt-get install -y --no-install-recommends g++-7
 
 # Install Python.
-RUN apt-get install -y python${PYTHON_VERSION} python${PYTHON_VERSION}-dev 
+RUN apt-get install -y python${PYTHON_VERSION} python${PYTHON_VERSION}-dev
 RUN if [[ "${PYTHON_VERSION}" == "3.6" ]]; then \
         apt-get install -y python${PYTHON_VERSION}-distutils; \
     fi
@@ -46,8 +45,6 @@ RUN pip install -U --force pip setuptools requests pytest
 # Install PySpark.
 RUN apt install -y openjdk-8-jdk-headless
 RUN pip install ${PYSPARK_PACKAGE}
-
-
 
 # Install MPI.
 RUN if [[ ${MPI_KIND} == "OpenMPI" ]]; then \
@@ -81,26 +78,25 @@ RUN if [[ ${MPI_KIND} == "OpenMPI" ]]; then \
             echo "-L/usr/local/mlsl/intel64/lib/thread -lmpi -I/usr/local/mlsl/intel64/include" > /mpicc_mlsl && \
             chmod +x /mpicc_mlsl && \
             echo "/mpirun_command_script" > /mpirun_command; \
-    else \
+    elif [[ ${MPI_KIND} == "MPICH" ]]; then \
         apt-get install -y mpich && \
             echo "mpirun -np 2" > /mpirun_command; \
     fi
 
 # Install mpi4py.
-RUN if [[ ${MPI_KIND} == "MLSL" ]]; then \
-        export I_MPI_ROOT=/usr/local/mlsl; \
-        export MPICC=/usr/local/mlsl/intel64/bin/mpicc; \
-    fi; \
-    pip install mpi4py
+RUN if [[ ${MPI_KIND} != "None" ]]; then \
+        if [[ ${MPI_KIND} == "MLSL" ]]; then \
+            export I_MPI_ROOT=/usr/local/mlsl; \
+            export MPICC=/usr/local/mlsl/intel64/bin/mpicc; \
+        fi; \
+        pip install mpi4py; \
+    fi
 
 ### END OF CACHE ###
 COPY . /horovod
 
 # Install TensorFlow.
 RUN pip install ${TENSORFLOW_PACKAGE}
-
-# Install Numpy
-RUN pip install ${NUMPY_PACKAGE}
 
 # Install Keras.
 RUN pip install ${KERAS_PACKAGE} h5py scipy pandas
