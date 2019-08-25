@@ -1,6 +1,7 @@
 ARG UBUNTU_VERSION=16.04
 FROM ubuntu:${UBUNTU_VERSION}
 
+#WORKDIR /home 
 # Arguments for the build. UBUNTU_VERSION needs to be repeated because
 # the first usage only applies to the FROM tag.
 ARG UBUNTU_VERSION=16.04
@@ -8,17 +9,18 @@ ARG MPI_KIND=OpenMPI
 ARG PYTHON_VERSION=2.7
 ARG TENSORFLOW_PACKAGE=tensorflow==1.14.0
 ARG KERAS_PACKAGE=keras==2.2.4
-ARG PYTORCH_PACKAGE=torch==1.2.0+cpu
-ARG TORCHVISION_PACKAGE=torchvision==0.4.0+cpu
-ARG MXNET_PACKAGE=mxnet==1.5.0
+ARG PYTORCH_PACKAGE=torch==1.1.0
+ARG TORCHVISION_PACKAGE=https://download.pytorch.org/whl/cpu/torchvision-0.3.0-cp27-cp27mu-linux_x86_64.whl
+ARG MXNET_PACKAGE=mxnet==1.4.1
 ARG PYSPARK_PACKAGE=pyspark==2.4.0
+
 
 # Set default shell to /bin/bash
 SHELL ["/bin/bash", "-cu"]
 
 # Install essential packages.
 RUN apt-get update -qq
-RUN apt-get install -y --no-install-recommends \
+RUN apt-get update --fix-missing && apt-get install -y --no-install-recommends \
         wget \
         ca-certificates \
         cmake \
@@ -26,12 +28,6 @@ RUN apt-get install -y --no-install-recommends \
         git \
         build-essential \
         g++-4.8
-
-# install g++-7
-RUN apt-get install -y --no-install-recommends software-properties-common
-RUN add-apt-repository ppa:ubuntu-toolchain-r/test
-RUN apt-get update -qq
-RUN apt-get install -y --no-install-recommends g++-7
 
 # Install Python.
 RUN apt-get install -y python${PYTHON_VERSION} python${PYTHON_VERSION}-dev
@@ -43,13 +39,15 @@ RUN wget https://bootstrap.pypa.io/get-pip.py && python get-pip.py && rm get-pip
 RUN pip install -U --force pip setuptools requests pytest
 
 # Install PySpark.
+
 RUN apt install -y openjdk-8-jdk-headless
-RUN pip install ${PYSPARK_PACKAGE}
+RUN pip install --default-timeout=3000  ${PYSPARK_PACKAGE}
 
 # Install MPI.
 RUN if [[ ${MPI_KIND} == "OpenMPI" ]]; then \
         wget -O /tmp/openmpi-3.0.0-bin.tar.gz https://github.com/horovod/horovod/files/1596799/openmpi-3.0.0-bin.tar.gz && \
-            cd /usr/local && tar -zxf /tmp/openmpi-3.0.0-bin.tar.gz && ldconfig && \
+        #cp openmpi-3.0.0-bin.tar.gz /tmp && \
+            cd /usr/local && tar -zvxf /tmp/openmpi-3.0.0-bin.tar.gz && ldconfig && \
             echo "mpirun -allow-run-as-root -np 2 -H localhost:2 -bind-to none -map-by slot -mca mpi_abort_print_stack 1" > /mpirun_command; \
     elif [[ ${MPI_KIND} == "MLSL" ]]; then \
         wget -O /tmp/l_mlsl_2018.3.008.tgz https://github.com/intel/MLSL/releases/download/IntelMLSL-v2018.3-Preview/l_mlsl_2018.3.008.tgz && \
@@ -78,19 +76,17 @@ RUN if [[ ${MPI_KIND} == "OpenMPI" ]]; then \
             echo "-L/usr/local/mlsl/intel64/lib/thread -lmpi -I/usr/local/mlsl/intel64/include" > /mpicc_mlsl && \
             chmod +x /mpicc_mlsl && \
             echo "/mpirun_command_script" > /mpirun_command; \
-    elif [[ ${MPI_KIND} == "MPICH" ]]; then \
+    else \
         apt-get install -y mpich && \
             echo "mpirun -np 2" > /mpirun_command; \
     fi
 
 # Install mpi4py.
-RUN if [[ ${MPI_KIND} != "None" ]]; then \
-        if [[ ${MPI_KIND} == "MLSL" ]]; then \
-            export I_MPI_ROOT=/usr/local/mlsl; \
-            export MPICC=/usr/local/mlsl/intel64/bin/mpicc; \
-        fi; \
-        pip install mpi4py; \
-    fi
+RUN if [[ ${MPI_KIND} == "MLSL" ]]; then \
+        export I_MPI_ROOT=/usr/local/mlsl; \
+        export MPICC=/usr/local/mlsl/intel64/bin/mpicc; \
+    fi; \
+    pip install mpi4py
 
 ### END OF CACHE ###
 COPY . /horovod
