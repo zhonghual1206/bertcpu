@@ -26,7 +26,7 @@ RUN  apt-get update && apt-get install -y --no-install-recommends \
         openssh-client \
         git \
         build-essential \
-        g++-4.8
+        g++-4.9
 
 # install g++-7
 RUN apt-get install -y --no-install-recommends software-properties-common
